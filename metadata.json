@@ -1,0 +1,6 @@
+{
+  "name": "Nayeem AI Desk",
+  "description": "Secure Smart Personal AI Admin Panel for Muhammad Nayeem with WhatsApp Cloud API, Telegram bot, memory, and reply approval controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
