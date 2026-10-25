@@ -61,8 +61,6 @@ apiRouter.get('/health', async (_req: Request, res: Response) => {
 
 apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   const { username, password } = req.body || {};
-  const expectedUsername = (process.env.ADMIN_USERNAME || 'nayeem').trim();
-  const expectedPassword = (process.env.ADMIN_PASSWORD || 'ChangeMe_NayeemAdmin2026!').trim();
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required.' });
@@ -71,42 +69,32 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   const cleanUser = String(username).trim();
   const cleanPass = String(password).trim();
 
-  // Case-insensitive username comparison, supports configured username or fallback
-  const uMatch =
-    cleanUser.toLowerCase() === expectedUsername.toLowerCase() ||
-    cleanUser.toLowerCase() === 'nayeem';
+  const authResult = await appStore.verifyAdminCredentials(cleanUser, cleanPass);
 
-  // Support configured password or default template password
-  const pMatch =
-    cleanPass === expectedPassword ||
-    cleanPass === 'ChangeMe_NayeemAdmin2026!';
-
-  if (uMatch && pMatch) {
-    const token = createAdminToken();
+  if (authResult.success && authResult.user) {
+    const token = createAdminToken(authResult.user.username);
     await appStore.addAuditLog({
       eventType: 'admin_login_success',
-      actor: username,
+      actor: authResult.user.username,
       details: { timestamp: new Date().toISOString() },
       ipAddress: req.ip,
     });
     return res.json({
       token,
-      user: {
-        username: expectedUsername,
-        name: 'Muhammad Nayeem',
-        role: 'Administrator & Owner',
-      },
+      user: authResult.user,
     });
   }
 
   await appStore.addAuditLog({
     eventType: 'admin_login_failed',
-    actor: username || 'unknown',
+    actor: cleanUser || 'unknown',
     details: { reason: 'Invalid credentials provided.' },
     ipAddress: req.ip,
   });
 
-  return res.status(401).json({ error: 'Invalid username or password.' });
+  return res.status(401).json({
+    error: 'Invalid username or password. Please verify your credentials.',
+  });
 });
 
 apiRouter.get('/auth/me', requireAdminAuth, async (_req: Request, res: Response) => {
@@ -959,17 +947,32 @@ async function processInboundPipeline(params: {
   }
 }
 
-// WhatsApp Webhook GET Verification
-apiRouter.get('/webhooks/whatsapp', (req: Request, res: Response) => {
+// WhatsApp Webhook GET Verification Handler (supports both /webhooks/whatsapp and /whatsapp/webhook)
+const handleWhatsAppWebhookGet = (req: Request, res: Response) => {
   const verification = verifyWhatsAppWebhookGet(req.query as Record<string, string>);
   if (verification.isValid) {
     return res.status(200).send(verification.challenge);
   }
   return res.status(403).json({ error: verification.reason });
-});
+};
+
+apiRouter.get('/webhooks/whatsapp', handleWhatsAppWebhookGet);
+apiRouter.get('/whatsapp/webhook', handleWhatsAppWebhookGet);
 
 // WhatsApp Webhook POST Handler (delegated to src/server/webhooks/whatsapp.ts)
 apiRouter.post('/webhooks/whatsapp', postWhatsAppWebhook);
+apiRouter.post('/whatsapp/webhook', postWhatsAppWebhook);
+
+// Inbox Cleanup Endpoints (removes dummy test messages and resets inbox)
+apiRouter.post('/inbox/clear-test-data', requireAdminAuth, async (_req: Request, res: Response) => {
+  const result = await appStore.clearTestData(false);
+  return res.json(result);
+});
+
+apiRouter.post('/inbox/clear-all', requireAdminAuth, async (_req: Request, res: Response) => {
+  const result = await appStore.clearTestData(true);
+  return res.json(result);
+});
 
 // Webhook Simulation Endpoint (for Admin UI testing without live Meta webhook)
 apiRouter.post('/webhooks/simulate-inbound', requireAdminAuth, async (req: Request, res: Response) => {

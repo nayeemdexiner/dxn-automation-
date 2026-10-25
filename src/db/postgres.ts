@@ -85,17 +85,44 @@ export function isSupabaseDatabase(): boolean {
   return url.includes('supabase.co') || url.includes('supabase.com') || host.includes('supabase');
 }
 
-export function getPostgresPool(): pg.Pool | null {
+export function getSupabasePoolerConfig(parsed: SafePostgresConfig): SafePostgresConfig | null {
+  if (parsed.host.startsWith('db.') && (parsed.host.endsWith('.supabase.co') || parsed.host.endsWith('.supabase.com'))) {
+    const projectRef = parsed.host.replace(/^db\./, '').replace(/\.supabase\.(co|com)$/, '');
+    return {
+      host: 'aws-0-ap-northeast-2.pooler.supabase.com',
+      port: 6543,
+      user: `postgres.${projectRef}`,
+      password: parsed.password,
+      database: parsed.database || 'postgres',
+      ssl: { rejectUnauthorized: false },
+    };
+  }
+  return null;
+}
+
+export function getPostgresPool(forcePooler = false): pg.Pool | null {
   if (!isPostgresConfigured()) {
     return null;
   }
 
-  if (!global._appPostgresPool) {
+  if (!global._appPostgresPool || forcePooler) {
+    if (global._appPostgresPool && forcePooler) {
+      global._appPostgresPool.end().catch(() => {});
+    }
+
     if (process.env.DATABASE_URL) {
-      const parsed = parsePostgresConnectionString(process.env.DATABASE_URL);
+      let parsed = parsePostgresConnectionString(process.env.DATABASE_URL);
       if (!parsed) {
         return null;
       }
+
+      // If running on Render (where IPv6 is absent) or forcePooler is requested, use IPv4 pooler
+      const isRender = process.env.RENDER === 'true' || Boolean(process.env.RENDER_SERVICE_ID);
+      const pooler = getSupabasePoolerConfig(parsed);
+      if ((isRender || forcePooler) && pooler) {
+        parsed = pooler;
+      }
+
       global._appPostgresPool = new Pool({
         host: parsed.host,
         user: parsed.user,
@@ -167,6 +194,36 @@ export async function testPostgresConnection(): Promise<{
     };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+
+    // If connection failed due to IPv6 ENETUNREACH on direct host, attempt switching to IPv4 Pooler
+    if (errorMsg.includes('ENETUNREACH') || errorMsg.includes('EAI_AGAIN') || errorMsg.includes('ETIMEDOUT')) {
+      const poolerPool = getPostgresPool(true);
+      if (poolerPool) {
+        try {
+          const res = await poolerPool.query('SELECT version()');
+          const tableRes = await poolerPool.query(`
+            SELECT count(*) AS count FROM information_schema.tables 
+            WHERE table_schema = 'public'
+          `);
+          const count = parseInt(tableRes.rows[0]?.count || '0', 10);
+          return {
+            ok: true,
+            message: `Supabase PostgreSQL connected via IPv4 Connection Pooler (${count} tables found)!`,
+            version: res.rows[0]?.version || 'PostgreSQL connected',
+            isSupabase: true,
+            tableCount: count,
+          };
+        } catch (poolerErr: unknown) {
+          const poolerMsg = poolerErr instanceof Error ? poolerErr.message : String(poolerErr);
+          return {
+            ok: false,
+            message: `Failed to connect to PostgreSQL (direct: ${errorMsg}, pooler: ${poolerMsg})`,
+            isSupabase: isSupabaseDatabase(),
+          };
+        }
+      }
+    }
+
     return {
       ok: false,
       message: `Failed to connect to PostgreSQL: ${errorMsg}`,

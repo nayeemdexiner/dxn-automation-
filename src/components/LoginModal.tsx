@@ -71,8 +71,32 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               onChange={(e) => setUsername(e.target.value)}
               required
               className="w-full text-xs px-3 py-2 border border-zinc-300 rounded focus:outline-hidden focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 bg-white"
-              placeholder="e.g. nayeem or your email"
+              placeholder="e.g. selldxnxd@gmail.com, nayeem, or admin"
             />
+            <div className="flex items-center space-x-1.5 mt-1.5">
+              <span className="text-[10px] text-zinc-400">Quick fill:</span>
+              <button
+                type="button"
+                onClick={() => setUsername('selldxnxd@gmail.com')}
+                className="text-[10px] font-mono bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              >
+                selldxnxd@gmail.com
+              </button>
+              <button
+                type="button"
+                onClick={() => setUsername('nayeem')}
+                className="text-[10px] font-mono bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              >
+                nayeem
+              </button>
+              <button
+                type="button"
+                onClick={() => setUsername('admin')}
+                className="text-[10px] font-mono bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              >
+                admin
+              </button>
+            </div>
           </div>
 
           <div>
@@ -85,16 +109,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               onChange={(e) => setPassword(e.target.value)}
               required
               className="w-full text-xs px-3 py-2 border border-zinc-300 rounded focus:outline-hidden focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 bg-white"
-              placeholder="Enter master password"
+              placeholder="Enter your master password"
             />
           </div>
 
           <div className="p-3 bg-zinc-100/70 border border-zinc-200/80 rounded text-[11px] text-zinc-600 space-y-1">
             <div className="font-semibold text-zinc-800 flex items-center space-x-1">
-              <KeyRound className="w-3 h-3" />
-              <span>Accepted Credentials</span>
+              <KeyRound className="w-3 h-3 text-emerald-600" />
+              <span>Database Admin Access Active</span>
             </div>
-            <div>Enter your configured master password or default password <code className="bg-zinc-200/80 px-1 py-0.5 rounded text-zinc-900 font-mono">ChangeMe_NayeemAdmin2026!</code>.</div>
+            <div>
+              You can log in with your email <span className="font-semibold text-zinc-800">selldxnxd@gmail.com</span>, <span className="font-semibold text-zinc-800">nayeem</span>, or <span className="font-semibold text-zinc-800">admin</span> using your configured password or default master password <code className="bg-zinc-200/80 px-1 py-0.5 rounded text-zinc-900 font-mono">ChangeMe_NayeemAdmin2026!</code>.
+            </div>
           </div>
 
           <button

@@ -7,6 +7,7 @@ import { apiRouter } from './src/routes/api.ts';
 import { rateLimiter } from './src/middleware/auth.ts';
 import { isPostgresConfigured, runPostgresMigrations } from './src/db/postgres.ts';
 import { recoverPendingJobs } from './src/services/jobQueue.ts';
+import { appStore } from './src/db/store.ts';
 
 dotenv.config();
 
@@ -53,11 +54,14 @@ async function startServer() {
       } else {
         console.warn('[PostgreSQL Warning]:', res.message);
       }
+      await appStore.initAdminUsers();
       await recoverPendingJobs();
     }).catch((err) => {
       console.warn('[PostgreSQL Warning]:', err.message);
+      appStore.initAdminUsers().catch(() => {});
     });
   } else {
+    appStore.initAdminUsers().catch(() => {});
     recoverPendingJobs().catch(() => {});
   }
 

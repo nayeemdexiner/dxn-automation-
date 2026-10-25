@@ -1,6 +1,6 @@
 import dns from 'node:dns/promises';
 import net from 'node:net';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { appStore } from '../db/store.ts';
 import { detectLanguage } from './gemini.ts';
 
@@ -317,22 +317,31 @@ Format response as strict JSON:
   "draftReply": "Concise, friendly WhatsApp message ready to send"
 }`;
 
-      const res = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
-        },
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      try {
+        const res = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents: prompt,
+          config: {
+            abortSignal: controller.signal,
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+          },
+        });
+        clearTimeout(timeoutId);
 
-      const parsed = JSON.parse(res.text || '{}');
-      if (parsed.summary) summary = parsed.summary;
-      if (Array.isArray(parsed.facts)) facts = parsed.facts;
-      if (Array.isArray(parsed.inferences)) inferences = parsed.inferences;
-      if (parsed.draftReply) draftReply = parsed.draftReply;
-    } catch (err) {
-      console.warn('[Research Gemini Notice]: Using deterministic grounded fallback:', err);
+        const parsed = JSON.parse(res.text || '{}');
+        if (parsed.summary) summary = parsed.summary;
+        if (Array.isArray(parsed.facts)) facts = parsed.facts;
+        if (Array.isArray(parsed.inferences)) inferences = parsed.inferences;
+        if (parsed.draftReply) draftReply = parsed.draftReply;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch {
+      // Fall back to deterministic grounded synthesis
     }
   }
 

@@ -19,6 +19,12 @@ import {
   isApprovedWebsiteDomain,
   parseHtmlContent,
 } from '../src/services/websiteSync.ts';
+import {
+  hashPassword,
+  verifyPassword,
+  verifyAdminLogin,
+  ensureDefaultAdminUsers,
+} from '../src/services/authService.ts';
 
 let passedCount = 0;
 let failedCount = 0;
@@ -642,6 +648,38 @@ Category: Pricing`;
   const renderConfig = fs.readFileSync(path.resolve(process.cwd(), 'render.yaml'), 'utf8');
   assert(renderConfig.includes('buildCommand: npm install && npm run build'), '15.5 Render build command configured properly');
   assert(renderConfig.includes('startCommand: npm start'), '15.6 Render start command configured properly');
+
+  // ----------------------------------------------------
+  // TEST SUITE 16: DATABASE ADMIN USER AUTHENTICATION
+  // ----------------------------------------------------
+  console.log('\nTest Suite 16: Database Admin User Authentication');
+  await ensureDefaultAdminUsers();
+
+  const hashed = hashPassword('TestSecretPass_2026!');
+  assert(hashed.startsWith('scrypt:'), '16.1 Scrypt password hash format verified');
+  assert(verifyPassword('TestSecretPass_2026!', hashed), '16.2 Password verification succeeds for valid pass');
+  assert(!verifyPassword('WrongPassword!', hashed), '16.3 Password verification rejects invalid pass');
+
+  // Test admin login with selldxnxd@gmail.com
+  const emailLogin = await verifyAdminLogin('selldxnxd@gmail.com', 'ChangeMe_NayeemAdmin2026!');
+  assert(emailLogin.success === true, '16.4 Admin login with email selldxnxd@gmail.com succeeds');
+  assert(emailLogin.user?.role === 'Administrator & Owner', '16.5 User assigned Administrator & Owner role');
+
+  // Test admin login with nayeem
+  const nayeemLogin = await verifyAdminLogin('nayeem', 'ChangeMe_NayeemAdmin2026!');
+  assert(nayeemLogin.success === true, '16.6 Admin login with username nayeem succeeds');
+
+  // Test admin login with admin
+  const adminLogin = await verifyAdminLogin('admin', 'ChangeMe_NayeemAdmin2026!');
+  assert(adminLogin.success === true, '16.7 Admin login with username admin succeeds');
+
+  // Test invalid password rejection
+  const invalidPassLogin = await verifyAdminLogin('selldxnxd@gmail.com', 'InvalidPassword999!');
+  assert(invalidPassLogin.success === false, '16.8 Invalid password strictly rejected');
+
+  // Test unknown username rejection
+  const unknownUserLogin = await verifyAdminLogin('random_intruder@evil.com', 'ChangeMe_NayeemAdmin2026!');
+  assert(unknownUserLogin.success === false, '16.9 Non-admin username strictly rejected');
 
   // Summary
   console.log('\n====================================================');

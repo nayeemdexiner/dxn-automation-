@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import {
   ClassificationResult,
   KnowledgeItem,
@@ -216,33 +216,32 @@ Respond ONLY with valid JSON with keys:
 Inbound Message:
 """${text.replace(/"/g, '\\"')}"""`;
 
-  // Try gemini-3.1-flash-lite first, then gemini-3.8-flash
+  // Try candidate models with explicit abort control and minimal thinking overhead
   const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
   for (const model of candidateModels) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
-      const callPromise = ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model,
         contents: promptContents,
         config: {
+          abortSignal: controller.signal,
           responseMimeType: 'application/json',
           temperature: 0.1,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         },
       });
 
-      const response = await Promise.race([
-        callPromise,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Gemini ${model} classification timed out`)), 4000)
-        ),
-      ]);
-
+      clearTimeout(timeoutId);
       const jsonText = response.text?.trim();
       if (jsonText) {
         const parsed = JSON.parse(jsonText) as ClassificationResult;
         return parsed;
       }
-    } catch (err) {
-      console.warn(`[Gemini Classifier] Model ${model} call notice:`, err instanceof Error ? err.message : err);
+    } catch {
+      clearTimeout(timeoutId);
+      // Fall through to next model or rule-based engine cleanly
     }
   }
 
@@ -337,31 +336,30 @@ DETECTED LANGUAGE: ${params.detectedLanguage}
 TASK:
 Generate a context-aware, natural, human WhatsApp reply for ${params.senderName} that fits the flow of conversation. Output ONLY the response text.`;
 
-  // Try candidate models
+  // Try candidate models with explicit abort control and bounded thinking latency
   const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
   for (const model of candidateModels) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 16000);
     try {
-      const callPromise = ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model,
         contents: prompt,
         config: {
+          abortSignal: controller.signal,
           temperature: 0.3,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         },
       });
 
-      const response = await Promise.race([
-        callPromise,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Gemini ${model} generation timed out`)), 12000)
-        ),
-      ]);
-
+      clearTimeout(timeoutId);
       const reply = response.text?.trim();
       if (reply) {
         return reply;
       }
-    } catch (err) {
-      console.warn(`[Gemini Generator Notice] Model ${model} failed, trying next:`, err instanceof Error ? err.message : err);
+    } catch {
+      clearTimeout(timeoutId);
+      // Fall through to next candidate model or deterministic fallback cleanly
     }
   }
 
@@ -420,16 +418,21 @@ Return JSON with exactly these fields:
 
     const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
     for (const model of candidateModels) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
       try {
         const response = await ai.models.generateContent({
           model,
           contents: prompt,
           config: {
+            abortSignal: controller.signal,
             temperature: 0.2,
             responseMimeType: 'application/json',
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
           },
         });
 
+        clearTimeout(timeoutId);
         const raw = response.text?.trim();
         if (raw) {
           const parsed = JSON.parse(raw);
@@ -445,8 +448,9 @@ Return JSON with exactly these fields:
             generatedAt: new Date().toISOString(),
           };
         }
-      } catch (err) {
-        console.warn(`[Insights Generation Notice] Model ${model} failed, trying fallback:`, err instanceof Error ? err.message : err);
+      } catch {
+        clearTimeout(timeoutId);
+        // Fall through to next model or deterministic fallback cleanly
       }
     }
   }

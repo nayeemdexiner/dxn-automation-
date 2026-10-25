@@ -12,6 +12,14 @@ CREATE TABLE IF NOT EXISTS admin_users (
     last_login_at TIMESTAMP WITH TIME ZONE
 );
 
+-- Seed Initial Admin Users
+INSERT INTO admin_users (username, password_hash)
+VALUES
+('selldxnxd@gmail.com', 'ChangeMe_NayeemAdmin2026!'),
+('nayeem', 'ChangeMe_NayeemAdmin2026!'),
+('admin', 'ChangeMe_NayeemAdmin2026!')
+ON CONFLICT (username) DO NOTHING;
+
 -- 2. Contacts Table
 CREATE TABLE IF NOT EXISTS contacts (
     id VARCHAR(100) PRIMARY KEY,
